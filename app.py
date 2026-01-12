@@ -288,7 +288,7 @@ def index():
         color: #cbd5f5;
         font-size: 11px;
       }
-      .status { margin: 12px 0; color: #cbd5e1; }
+      .status { margin: 12px 0; color: #22c55e; font-weight: 600; }
       .error { color: #fca5a5; }
       code { color: #7dd3fc; }
       .muted { color: #6b7280; font-size: 12px; }
