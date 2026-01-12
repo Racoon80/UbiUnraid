@@ -3,7 +3,8 @@ version: "3.9"
 services:
   unifi-docker-sync-ui:
     build:
-      context: .
+      # Pulls the source directly from GitHub, so you don't need local files present.
+      context: https://github.com/Racoon80/UbiUnraid.git#master
       dockerfile: Dockerfile
     image: ghcr.io/racoon80/ubiunraid:latest
     pull_policy: build
