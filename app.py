@@ -237,12 +237,15 @@ def index():
     </style>
   </head>
   <body>
-    <h1>Unraid <-> UniFi Docker Mapper</h1>
+    <h1 style="display:flex; align-items:center; gap:12px;">
+      <span>Unraid <-> UniFi Docker Mapper</span>
+      <button class="btn" style="padding:6px 12px;" onclick="loadData()">Refresh</button>
+    </h1>
     <div class="status" id="status">Loading...</div>
     <div class="card">
       <h2>MAC-aligned view</h2>
       <div class="row label">
-        <div>Unraid (name / IP)</div><div>UniFi (MAC)</div><div>Action</div>
+        <div>Unraid (name / IP / MAC)</div><div>UniFi (name / IP / MAC)</div><div>Action</div>
       </div>
       <div id="rows"></div>
     </div>
@@ -285,8 +288,9 @@ def index():
         rowsEl.innerHTML = intersection.length
           ? intersection.map(mac => {
               const c = containerByMac[mac];
-              const containerCol = `<strong>${c.name}</strong><div class="pill">${c.ip}</div>`;
-              const routerCol = `<code>${mac}</code>`;
+              const r = routerByMac[mac];
+              const containerCol = `<strong>${c.name}</strong><div class="pill">${c.ip}</div><div class="pill">${c.mac}</div>`;
+              const routerCol = `<strong>${r.name || r.hostname || "—"}</strong><div class="pill">${r.fixed_ip || "—"}</div><div class="pill">${mac}</div>`;
               return rowTemplate([
                 containerCol,
                 routerCol,
