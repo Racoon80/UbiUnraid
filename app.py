@@ -14,16 +14,13 @@ UNIFI_PASSWORD = os.environ.get("UNIFI_PASSWORD") or ""
 UNIFI_SITE = os.environ.get("UNIFI_SITE", "default")
 UNIFI_NETWORK_ID = os.environ.get("UNIFI_NETWORK_ID") or ""
 VERIFY_SSL = os.environ.get("VERIFY_SSL", "false").lower() == "true"
-UNIFI_API_KEY = os.environ.get("UNIFI_API_KEY") or ""
 
 
 def ensure_configured() -> Optional[str]:
-    if not UNIFI_HOST:
-        return "UNIFI_HOST must be set."
-    if not UNIFI_API_KEY and (not UNIFI_USERNAME or not UNIFI_PASSWORD):
+    if not UNIFI_HOST or not UNIFI_USERNAME or not UNIFI_PASSWORD:
         return (
-            "Either UNIFI_API_KEY must be set, or UNIFI_USERNAME and "
-            "UNIFI_PASSWORD must be provided."
+            "UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD "
+            "must be set as environment variables."
         )
     return None
 
@@ -38,15 +35,10 @@ def build_session() -> requests.Session:
             "X-Requested-With": "XMLHttpRequest",
         }
     )
-    if UNIFI_API_KEY:
-        session.headers.update({"X-API-KEY": UNIFI_API_KEY})
     return session
 
 
 def login(session: requests.Session) -> None:
-    if UNIFI_API_KEY:
-        # API key auth path skips cookie login.
-        return
     resp = session.post(
         f"{UNIFI_HOST}/api/auth/login",
         data=json.dumps({"username": UNIFI_USERNAME, "password": UNIFI_PASSWORD}),
@@ -70,8 +62,6 @@ def login(session: requests.Session) -> None:
 
 def login_network(session: requests.Session) -> None:
     """Some UniFi OS versions require an additional Network app login."""
-    if UNIFI_API_KEY:
-        return
     csrf = session.cookies.get("csrf_token")
     headers = {"X-Requested-With": "XMLHttpRequest"}
     if csrf:
