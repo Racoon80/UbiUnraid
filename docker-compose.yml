@@ -12,11 +12,11 @@ services:
       - "8000:8000"
     restart: unless-stopped
     environment:
-      UNIFI_HOST: "${UNIFI_HOST}"
-      UNIFI_USERNAME: "${UNIFI_USERNAME}"
-      UNIFI_PASSWORD: "${UNIFI_PASSWORD}"
-      UNIFI_SITE: "${UNIFI_SITE:-default}"
-      UNIFI_NETWORK_ID: "${UNIFI_NETWORK_ID}"
-      VERIFY_SSL: "${VERIFY_SSL:-false}"
+      - UNIFI_HOST=${UNIFI_HOST}
+      - UNIFI_USERNAME=${UNIFI_USERNAME}
+      - UNIFI_PASSWORD=${UNIFI_PASSWORD}
+      - UNIFI_SITE=${UNIFI_SITE:-default}
+      - UNIFI_NETWORK_ID=${UNIFI_NETWORK_ID}
+      - VERIFY_SSL=${VERIFY_SSL:-false}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
