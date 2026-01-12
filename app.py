@@ -300,6 +300,14 @@ def index():
       <button class="btn" style="padding:6px 12px;" onclick="loadData()">Refresh</button>
     </h1>
     <div class="status" id="status">Loading...</div>
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
+      <input id="search" type="text" placeholder="Search name / IP / MAC" style="padding:8px 10px; border-radius:8px; border:1px solid #1f2937; background:#0b1224; color:#e2e8f0; flex:1; min-width:200px;">
+      <select id="filter" style="padding:8px 10px; border-radius:8px; border:1px solid #1f2937; background:#0b1224; color:#e2e8f0;">
+        <option value="all">All</option>
+        <option value="unraid">Unraid only</option>
+        <option value="unifi">UniFi only</option>
+      </select>
+    </div>
     <div class="card">
       <h2>MAC-aligned view</h2>
       <div class="row label">
@@ -311,6 +319,9 @@ def index():
     <script>
       const statusEl = document.getElementById("status");
       const rowsEl = document.getElementById("rows");
+      const searchEl = document.getElementById("search");
+      const filterEl = document.getElementById("filter");
+      let dataCache = null;
 
       function rowTemplate(cols) {
         return `<div class="row">${cols.map(col => `<div>${col || ""}</div>`).join("")}</div>`;
@@ -323,7 +334,8 @@ def index():
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || res.statusText);
 
-          renderRows(data);
+          dataCache = data;
+          renderRows(dataCache);
           statusEl.textContent = "Connected";
         } catch (err) {
           statusEl.innerHTML = `<span class="error">${err.message}</span>`;
@@ -342,9 +354,23 @@ def index():
 
         // Only show MACs that exist in both Unraid and UniFi.
         const intersection = Object.keys(containerByMac).filter(mac => routerByMac[mac]).sort();
+        const query = (searchEl.value || "").toLowerCase().trim();
+        const scope = filterEl.value || "all";
 
-        rowsEl.innerHTML = intersection.length
-          ? intersection.map(mac => {
+        const filtered = intersection.filter(mac => {
+          const c = containerByMac[mac];
+          const r = routerByMac[mac];
+          const hayC = c ? `${c.name} ${c.ip} ${c.mac}`.toLowerCase() : "";
+          const hayR = r ? `${r.name || ""} ${r.hostname || ""} ${r.fixed_ip || ""} ${r.mac}`.toLowerCase() : "";
+          const hitC = query ? hayC.includes(query) : true;
+          const hitR = query ? hayR.includes(query) : true;
+          if (scope === "unraid") return hitC;
+          if (scope === "unifi") return hitR;
+          return hitC || hitR;
+        });
+
+        rowsEl.innerHTML = filtered.length
+          ? filtered.map(mac => {
               const c = containerByMac[mac];
               const r = routerByMac[mac];
               const containerCol = `<strong>${c.name}</strong><div class="pill">${c.ip}</div><div class="pill">${c.mac}</div>`;
@@ -359,6 +385,9 @@ def index():
             }).join("")
           : '<div class="row"><div>No matching MAC addresses between Unraid and UniFi.</div></div>';
       }
+
+      searchEl.addEventListener("input", () => dataCache && renderRows(dataCache));
+      filterEl.addEventListener("change", () => dataCache && renderRows(dataCache));
 
       async function apply(mac) {
         statusEl.textContent = `Applying ${mac}...`;
