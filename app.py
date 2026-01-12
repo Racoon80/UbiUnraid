@@ -60,6 +60,21 @@ def login(session: requests.Session) -> None:
         )
 
 
+def login_network(session: requests.Session) -> None:
+    """Some UniFi OS versions require an additional Network app login."""
+    csrf = session.cookies.get("csrf_token")
+    headers = {"X-Requested-With": "XMLHttpRequest"}
+    if csrf:
+        headers["X-CSRF-Token"] = csrf
+    resp = session.post(
+        f"{UNIFI_HOST}/proxy/network/api/login",
+        data=json.dumps({"username": UNIFI_USERNAME, "password": UNIFI_PASSWORD}),
+        headers=headers,
+    )
+    # Some controllers return 200 with body ok; if 401/403 we raise to bubble up.
+    resp.raise_for_status()
+
+
 def fetch_clients(session: requests.Session) -> Dict[str, dict]:
     resp = session.get(f"{UNIFI_HOST}/proxy/network/api/s/{UNIFI_SITE}/rest/user")
     resp.raise_for_status()
@@ -141,6 +156,12 @@ def api_status():
     session = build_session()
     try:
         login(session)
+        # Optional second login for controllers that require Network app auth.
+        try:
+            login_network(session)
+        except Exception:
+            # If network login fails but main login succeeded, continue; errors bubble below.
+            pass
         clients = fetch_clients(session)
     except Exception as exc:
         return jsonify({"error": f"Unable to reach UniFi: {exc}"}), 502
@@ -187,6 +208,10 @@ def api_apply():
     session = build_session()
     try:
         login(session)
+        try:
+            login_network(session)
+        except Exception:
+            pass
         clients = fetch_clients(session)
         existing = clients.get(mac)
         message = upsert_client(session, container, existing)
