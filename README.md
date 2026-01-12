@@ -45,6 +45,10 @@ docker compose up --build -d
 ```
 Then open `http://<host>:8000/`.
 
+## Auth
+- Preferred: set `UNIFI_API_KEY` (sets `X-API-KEY`, no cookie login needed).
+- Fallback: set `UNIFI_USERNAME`/`UNIFI_PASSWORD` if no API key is available; CSRF/Bearer headers and optional `/proxy/network/api/login` are handled automatically.
+
 ## Find site name
 ```bash
 curl -k -H "X-API-KEY: $UNIFI_API_KEY" \
@@ -64,3 +68,7 @@ curl -k -H "X-API-KEY: $UNIFI_API_KEY" \
 - Shows only MACs present in both Unraid (docker) and UniFi.
 - Columns: Unraid (name/IP/MAC), UniFi (name/IP/MAC), Approve button.
 - Approve updates/creates the UniFi client with the container name and sets `use_fixedip=true` with the container IP on the chosen `UNIFI_NETWORK_ID`.
+
+## Security
+- Dependencies are pinned; `requests` is on 2.32.4 to address CVE-2024-35195 and CVE-2024-47081.
+- Run `python -m pip_audit -r requirements.txt` to recheck later.
