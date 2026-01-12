@@ -38,6 +38,10 @@ def login(session: requests.Session) -> None:
         data=json.dumps({"username": UNIFI_USERNAME, "password": UNIFI_PASSWORD}),
     )
     resp.raise_for_status()
+    # Some UniFi OS versions require the CSRF token header on subsequent writes.
+    csrf = session.cookies.get("csrf_token")
+    if csrf:
+        session.headers.update({"x-csrf-token": csrf})
 
 
 def fetch_clients(session: requests.Session) -> Dict[str, dict]:
