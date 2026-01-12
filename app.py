@@ -248,8 +248,8 @@ def index():
         background: #0f172a;
         color: #e2e8f0;
       }
-      body { margin: 0; padding: 24px; }
-      h1 { margin-top: 0; letter-spacing: 0.02em; }
+      body { margin: 0; padding: 24px; font-size: 17px; }
+      h1 { margin-top: 0; letter-spacing: 0.02em; font-size: 28px; }
       .card {
         background: #111827;
         border: 1px solid #1f2937;
@@ -257,7 +257,7 @@ def index():
         padding: 16px;
         box-shadow: 0 20px 40px rgba(0,0,0,0.3);
       }
-      .card h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: 0.02em; }
+      .card h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: 0.02em; }
       .row {
         display: grid;
         grid-template-columns: 1.6fr 1.2fr 0.8fr;
