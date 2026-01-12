@@ -19,6 +19,7 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/racoon80/ubiunraid:latest
     pull_policy: build
+    container_name: UbiUnraid
     ports:
       - "8000:8000"
     restart: unless-stopped
