@@ -242,7 +242,7 @@ def index():
     <div class="card">
       <h2>MAC-aligned view</h2>
       <div class="row label">
-        <div>Unraid Container</div><div>UniFi Client (MAC only)</div><div>Action</div>
+        <div>Unraid (name / IP)</div><div>UniFi (MAC)</div><div>Action</div>
       </div>
       <div id="rows"></div>
     </div>
@@ -275,42 +275,27 @@ def index():
 
         const containerByMac = {};
         const routerByMac = {};
-        const macs = new Set();
 
-        containers.forEach(c => {
-          containerByMac[c.mac] = c;
-          macs.add(c.mac);
-        });
-        router.forEach(r => {
-          routerByMac[r.mac] = r;
-          macs.add(r.mac);
-        });
+        containers.forEach(c => containerByMac[c.mac] = c);
+        router.forEach(r => routerByMac[r.mac] = r);
 
-        const sorted = Array.from(macs).sort();
+        // Only show MACs that exist in both Unraid and UniFi.
+        const intersection = Object.keys(containerByMac).filter(mac => routerByMac[mac]).sort();
 
-        rowsEl.innerHTML = sorted.length
-          ? sorted.map(mac => {
+        rowsEl.innerHTML = intersection.length
+          ? intersection.map(mac => {
               const c = containerByMac[mac];
-              const r = routerByMac[mac];
-              const containerCol = c
-                ? `<strong>${c.name}</strong><div class="pill">${c.ip}</div>`
-                : '<span class="muted">Not in Unraid</span>';
-              const routerCol = r
-                ? `<code>${mac}</code>`
-                : '<span class="muted">Not in UniFi</span>';
-              const disabled = !c;
-              const title = disabled
-                ? "No matching container to apply"
-                : "Apply container name/IP to UniFi";
+              const containerCol = `<strong>${c.name}</strong><div class="pill">${c.ip}</div>`;
+              const routerCol = `<code>${mac}</code>`;
               return rowTemplate([
                 containerCol,
                 routerCol,
                 `<div style="display:flex; justify-content:flex-end;">
-                   <button class="btn" ${disabled ? "disabled" : ""} title="${title}" onclick="apply('${mac}')">Approve</button>
+                   <button class="btn" title="Apply container name/IP to UniFi" onclick="apply('${mac}')">Approve</button>
                  </div>`
               ]);
             }).join("")
-          : '<div class="row"><div>No data.</div></div>';
+          : '<div class="row"><div>No matching MAC addresses between Unraid and UniFi.</div></div>';
       }
 
       async function apply(mac) {
