@@ -18,13 +18,8 @@ UNIFI_API_KEY = os.environ.get("UNIFI_API_KEY") or ""
 
 
 def ensure_configured() -> Optional[str]:
-    if not UNIFI_HOST:
-        return "UNIFI_HOST must be set."
-    if not UNIFI_API_KEY and (not UNIFI_USERNAME or not UNIFI_PASSWORD):
-        return (
-            "Either UNIFI_API_KEY must be set, or UNIFI_USERNAME and "
-            "UNIFI_PASSWORD must be provided."
-        )
+    if not UNIFI_HOST or not UNIFI_API_KEY:
+        return "UNIFI_HOST and UNIFI_API_KEY must be set."
     return None
 
 

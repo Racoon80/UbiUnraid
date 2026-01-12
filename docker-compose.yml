@@ -13,8 +13,6 @@ services:
     restart: unless-stopped
     environment:
       - UNIFI_HOST=${UNIFI_HOST}
-      - UNIFI_USERNAME=${UNIFI_USERNAME}
-      - UNIFI_PASSWORD=${UNIFI_PASSWORD}
       - UNIFI_API_KEY=${UNIFI_API_KEY}
       - UNIFI_SITE=${UNIFI_SITE:-default}
       - UNIFI_NETWORK_ID=${UNIFI_NETWORK_ID}
