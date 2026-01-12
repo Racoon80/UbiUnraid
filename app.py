@@ -28,7 +28,13 @@ def ensure_configured() -> Optional[str]:
 def build_session() -> requests.Session:
     session = requests.Session()
     session.verify = VERIFY_SSL
-    session.headers.update({"Content-Type": "application/json"})
+    session.headers.update(
+        {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+    )
     return session
 
 
@@ -45,7 +51,13 @@ def login(session: requests.Session) -> None:
     # Others expect an Authorization bearer using TOKEN cookie.
     bearer = session.cookies.get("TOKEN")
     if bearer:
-        session.headers.update({"Authorization": f"Bearer {bearer}"})
+        session.headers.update(
+            {
+                "Authorization": f"Bearer {bearer}",
+                "Referer": f"{UNIFI_HOST}/",
+                "Origin": UNIFI_HOST,
+            }
+        )
 
 
 def fetch_clients(session: requests.Session) -> Dict[str, dict]:
@@ -179,6 +191,14 @@ def api_apply():
         existing = clients.get(mac)
         message = upsert_client(session, container, existing)
         return jsonify({"ok": True, "message": message})
+    except requests.HTTPError as exc:
+        detail = ""
+        if exc.response is not None:
+            detail = f" (body: {exc.response.text})"
+        return (
+            jsonify({"error": f"{exc} {detail}".strip()}),
+            exc.response.status_code if exc.response is not None else 502,
+        )
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
 
