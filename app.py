@@ -267,7 +267,7 @@ def index():
         gap: 12px;
       }
       .row:last-child { border-bottom: none; }
-      .label { color: #94a3b8; font-size: 12px; }
+      .label { color: #94a3b8; font-size: 15px; font-weight: 600; }
       .btn {
         padding: 6px 10px;
         border-radius: 8px;
