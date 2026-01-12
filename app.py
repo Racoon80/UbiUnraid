@@ -301,34 +301,16 @@ def index():
     </h1>
     <div class="status" id="status">Loading...</div>
     <div class="card">
-      <h2>Unraid</h2>
+      <h2>MAC-aligned view</h2>
       <div class="row label">
-        <div>Name</div><div>IP</div><div>MAC</div>
+        <div>Unraid (name / IP / MAC)</div><div>UniFi (name / IP / MAC)</div><div>Action</div>
       </div>
-      <div id="unraid"></div>
-    </div>
-
-    <div class="card">
-      <h2>UniFi</h2>
-      <div class="row label">
-        <div>Name</div><div>IP</div><div>MAC</div>
-      </div>
-      <div id="unifi"></div>
-    </div>
-
-    <div class="card">
-      <h2>Approve</h2>
-      <div class="row label">
-        <div>Match</div><div></div><div>Action</div>
-      </div>
-      <div id="approve"></div>
+      <div id="rows"></div>
     </div>
 
     <script>
       const statusEl = document.getElementById("status");
-      const unraidEl = document.getElementById("unraid");
-      const unifiEl = document.getElementById("unifi");
-      const approveEl = document.getElementById("approve");
+      const rowsEl = document.getElementById("rows");
 
       function rowTemplate(cols) {
         return `<div class="row">${cols.map(col => `<div>${col || ""}</div>`).join("")}</div>`;
@@ -341,14 +323,14 @@ def index():
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || res.statusText);
 
-          renderViews(data);
+          renderRows(data);
           statusEl.textContent = "Connected";
         } catch (err) {
           statusEl.innerHTML = `<span class="error">${err.message}</span>`;
         }
       }
 
-      function renderViews(data) {
+      function renderRows(data) {
         const containers = data.containers || [];
         const router = (data.router_clients || []).filter(r => r.mac);
 
@@ -358,33 +340,18 @@ def index():
         containers.forEach(c => containerByMac[c.mac] = c);
         router.forEach(r => routerByMac[r.mac] = r);
 
+        // Only show MACs that exist in both Unraid and UniFi.
         const intersection = Object.keys(containerByMac).filter(mac => routerByMac[mac]).sort();
 
-        unraidEl.innerHTML = containers.length
-          ? containers.map(c => rowTemplate([
-              `<strong>${c.name}</strong>`,
-              `<code>${c.ip}</code>`,
-              `<code>${c.mac}</code>`
-            ])).join("")
-          : '<div class="row"><div>No running containers found.</div></div>';
-
-        unifiEl.innerHTML = router.length
-          ? router.map(r => rowTemplate([
-              `<strong>${r.name || r.hostname || "—"}</strong>`,
-              `<code>${r.fixed_ip || "—"}</code>`,
-              `<code>${r.mac}</code>`
-            ])).join("")
-          : '<div class="row"><div>No UniFi clients returned.</div></div>';
-
-        approveEl.innerHTML = intersection.length
+        rowsEl.innerHTML = intersection.length
           ? intersection.map(mac => {
               const c = containerByMac[mac];
               const r = routerByMac[mac];
-              const left = `<strong>${c.name}</strong><div class="pill">${c.ip}</div>`;
-              const right = `<strong>${r.name || r.hostname || "—"}</strong><div class="pill">${r.fixed_ip || "—"}</div>`;
+              const containerCol = `<strong>${c.name}</strong><div class="pill">${c.ip}</div><div class="pill">${c.mac}</div>`;
+              const routerCol = `<strong>${r.name || r.hostname || "—"}</strong><div class="pill">${r.fixed_ip || "—"}</div><div class="pill">${mac}</div>`;
               return rowTemplate([
-                `${left} ↔ ${right}`,
-                "",
+                containerCol,
+                routerCol,
                 `<div style="display:flex; justify-content:flex-end;">
                    <button class="btn" title="Apply container name/IP to UniFi" onclick="apply('${mac}')">Approve</button>
                  </div>`
