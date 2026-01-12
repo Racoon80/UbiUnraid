@@ -258,6 +258,11 @@ def index():
         box-shadow: 0 20px 40px rgba(0,0,0,0.3);
       }
       .card h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: 0.02em; }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
       .row {
         display: grid;
         grid-template-columns: 1.6fr 1.2fr 0.8fr;
@@ -300,28 +305,30 @@ def index():
       <button class="btn" style="padding:6px 12px;" onclick="loadData()">Refresh</button>
     </h1>
     <div class="status" id="status">Loading...</div>
-    <div class="card">
-      <h2>Unraid</h2>
-      <div class="row label">
-        <div>Name</div><div>IP</div><div>MAC</div>
+    <div class="cards">
+      <div class="card">
+        <h2>Unraid</h2>
+        <div class="row label">
+          <div>Name</div><div>IP</div><div>MAC</div>
+        </div>
+        <div id="unraid"></div>
       </div>
-      <div id="unraid"></div>
-    </div>
 
-    <div class="card">
-      <h2>UniFi</h2>
-      <div class="row label">
-        <div>Name</div><div>IP</div><div>MAC</div>
+      <div class="card">
+        <h2>UniFi</h2>
+        <div class="row label">
+          <div>Name</div><div>IP</div><div>MAC</div>
+        </div>
+        <div id="unifi"></div>
       </div>
-      <div id="unifi"></div>
-    </div>
 
-    <div class="card">
-      <h2>Approve</h2>
-      <div class="row label">
-        <div>Match</div><div></div><div>Action</div>
+      <div class="card">
+        <h2>Approve</h2>
+        <div class="row label">
+          <div>Match</div><div></div><div>Action</div>
+        </div>
+        <div id="approve"></div>
       </div>
-      <div id="approve"></div>
     </div>
 
     <script>
