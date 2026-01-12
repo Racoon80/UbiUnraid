@@ -42,6 +42,10 @@ def login(session: requests.Session) -> None:
     csrf = session.cookies.get("csrf_token")
     if csrf:
         session.headers.update({"x-csrf-token": csrf})
+    # Others expect an Authorization bearer using TOKEN cookie.
+    bearer = session.cookies.get("TOKEN")
+    if bearer:
+        session.headers.update({"Authorization": f"Bearer {bearer}"})
 
 
 def fetch_clients(session: requests.Session) -> Dict[str, dict]:
