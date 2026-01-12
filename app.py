@@ -18,7 +18,10 @@ VERIFY_SSL = os.environ.get("VERIFY_SSL", "false").lower() == "true"
 
 def ensure_configured() -> Optional[str]:
     if not UNIFI_HOST or not UNIFI_USERNAME or not UNIFI_PASSWORD:
-        return "UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD must be set as environment variables."
+        return (
+            "UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD "
+            "must be set as environment variables."
+        )
     return None
 
 
@@ -113,7 +116,7 @@ def api_status():
     if cfg_error:
         return jsonify({"error": cfg_error}), 500
 
-    containers, container_index = get_containers()
+    containers, _ = get_containers()
 
     session = build_session()
     try:
@@ -180,7 +183,7 @@ def index():
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Unraid ↔ UniFi Mapper</title>
+    <title>Unraid <-> UniFi Mapper</title>
     <style>
       :root {
         font-family: "Segoe UI", sans-serif;
@@ -189,11 +192,6 @@ def index():
       }
       body { margin: 0; padding: 24px; }
       h1 { margin-top: 0; letter-spacing: 0.02em; }
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-      }
       .card {
         background: #111827;
         border: 1px solid #1f2937;
@@ -204,7 +202,7 @@ def index():
       .card h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: 0.02em; }
       .row {
         display: grid;
-        grid-template-columns: 1.4fr 1fr 1fr;
+        grid-template-columns: 1.6fr 1.2fr 0.8fr;
         align-items: center;
         padding: 8px 0;
         border-bottom: 1px solid #1f2937;
@@ -235,84 +233,88 @@ def index():
       .status { margin: 12px 0; color: #cbd5e1; }
       .error { color: #fca5a5; }
       code { color: #7dd3fc; }
+      .muted { color: #6b7280; font-size: 12px; }
     </style>
   </head>
   <body>
-    <h1>Unraid ↔ UniFi Docker Mapper</h1>
-    <div class="status" id="status">Loading…</div>
-    <div class="grid">
-      <div class="card">
-        <h2>Unraid Containers</h2>
-        <div class="row label">
-          <div>Name</div><div>MAC</div><div>IP</div>
-        </div>
-        <div id="unraid"></div>
+    <h1>Unraid <-> UniFi Docker Mapper</h1>
+    <div class="status" id="status">Loading...</div>
+    <div class="card">
+      <h2>MAC-aligned view</h2>
+      <div class="row label">
+        <div>Unraid Container</div><div>UniFi Client (MAC only)</div><div>Action</div>
       </div>
-      <div class="card">
-        <h2>UniFi Router Clients</h2>
-        <div class="row label">
-          <div>Name / Host</div><div>MAC</div><div>Fixed IP</div>
-        </div>
-        <div id="router"></div>
-      </div>
+      <div id="rows"></div>
     </div>
 
     <script>
       const statusEl = document.getElementById("status");
-      const unraidEl = document.getElementById("unraid");
-      const routerEl = document.getElementById("router");
+      const rowsEl = document.getElementById("rows");
 
       function rowTemplate(cols) {
         return `<div class="row">${cols.map(col => `<div>${col || ""}</div>`).join("")}</div>`;
       }
 
       async function loadData() {
-        statusEl.textContent = "Loading…";
+        statusEl.textContent = "Loading...";
         try {
           const res = await fetch("/api/status");
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || res.statusText);
 
-          renderColumns(data);
+          renderRows(data);
           statusEl.textContent = "Connected";
         } catch (err) {
           statusEl.innerHTML = `<span class="error">${err.message}</span>`;
         }
       }
 
-      function renderColumns(data) {
+      function renderRows(data) {
         const containers = data.containers || [];
-        const router = data.router_clients || [];
+        const router = (data.router_clients || []).filter(r => r.mac);
+
         const containerByMac = {};
-        containers.forEach(c => containerByMac[c.mac] = c);
+        const routerByMac = {};
+        const macs = new Set();
 
-        unraidEl.innerHTML = containers.length
-          ? containers.map(c => rowTemplate([
-              `<strong>${c.name}</strong><div class="pill">${c.network}</div>`,
-              `<code>${c.mac}</code>`,
-              `<code>${c.ip}</code>`
-            ])).join("")
-          : '<div class="row"><div>No running containers found.</div></div>';
+        containers.forEach(c => {
+          containerByMac[c.mac] = c;
+          macs.add(c.mac);
+        });
+        router.forEach(r => {
+          routerByMac[r.mac] = r;
+          macs.add(r.mac);
+        });
 
-        routerEl.innerHTML = router.length
-          ? router.map(r => {
-              const match = containerByMac[r.mac];
-              const disabled = !match;
-              const title = disabled ? "No matching container MAC to apply" : "Apply name + fixed IP from Unraid container";
+        const sorted = Array.from(macs).sort();
+
+        rowsEl.innerHTML = sorted.length
+          ? sorted.map(mac => {
+              const c = containerByMac[mac];
+              const r = routerByMac[mac];
+              const containerCol = c
+                ? `<strong>${c.name}</strong><div class="pill">${c.ip}</div>`
+                : '<span class="muted">Not in Unraid</span>';
+              const routerCol = r
+                ? `<code>${mac}</code>`
+                : '<span class="muted">Not in UniFi</span>';
+              const disabled = !c;
+              const title = disabled
+                ? "No matching container to apply"
+                : "Apply container name/IP to UniFi";
               return rowTemplate([
-                `<strong>${r.name || "—"}</strong><div class="pill">${r.hostname || "host?"}</div>`,
-                `<code>${r.mac}</code>`,
-                `<div style="display:flex; gap:8px; align-items:center;">
-                   <code>${r.fixed_ip || "—"}</code>
-                   <button class="btn" ${disabled ? "disabled" : ""} title="${title}" onclick="apply('${r.mac}')">Approve</button>
+                containerCol,
+                routerCol,
+                `<div style="display:flex; justify-content:flex-end;">
+                   <button class="btn" ${disabled ? "disabled" : ""} title="${title}" onclick="apply('${mac}')">Approve</button>
                  </div>`
               ]);
             }).join("")
-          : '<div class="row"><div>No router clients returned.</div></div>';
+          : '<div class="row"><div>No data.</div></div>';
       }
 
       async function apply(mac) {
-        statusEl.textContent = `Applying ${mac}…`;
+        statusEl.textContent = `Applying ${mac}...`;
         try {
           const res = await fetch("/api/apply", {
             method: "POST",
