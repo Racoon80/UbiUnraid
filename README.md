@@ -72,3 +72,6 @@ curl -k -H "X-API-KEY: $UNIFI_API_KEY" \
 ## Security
 - Dependencies are pinned; `requests` is on 2.32.4 to address CVE-2024-35195 and CVE-2024-47081.
 - Run `python -m pip_audit -r requirements.txt` to recheck later.
+
+
+<a href="https://www.buymeacoffee.com/dv7g" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
