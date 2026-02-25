@@ -15,6 +15,7 @@ UNIFI_SITE = os.environ.get("UNIFI_SITE", "default")
 UNIFI_NETWORK_ID = os.environ.get("UNIFI_NETWORK_ID") or ""
 VERIFY_SSL = os.environ.get("VERIFY_SSL", "false").lower() == "true"
 UNIFI_API_KEY = os.environ.get("UNIFI_API_KEY") or ""
+REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "30"))
 
 
 def ensure_configured() -> Optional[str]:
@@ -23,8 +24,16 @@ def ensure_configured() -> Optional[str]:
     return None
 
 
-def build_session() -> requests.Session:
-    session = requests.Session()
+class _TimeoutSession(requests.Session):
+    """A requests.Session that applies a default timeout to every request."""
+
+    def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+        return super().request(*args, **kwargs)
+
+
+def build_session() -> _TimeoutSession:
+    session = _TimeoutSession()
     session.verify = VERIFY_SSL
     session.headers.update(
         {
@@ -83,7 +92,14 @@ def login_network(session: requests.Session) -> None:
 def fetch_clients(session: requests.Session) -> Dict[str, dict]:
     resp = session.get(f"{UNIFI_HOST}/proxy/network/api/s/{UNIFI_SITE}/rest/user")
     resp.raise_for_status()
-    data = resp.json().get("data", [])
+    try:
+        body = resp.json()
+    except (ValueError, json.JSONDecodeError):
+        raise RuntimeError(
+            f"UniFi returned non-JSON response (status {resp.status_code}, "
+            f"content-type: {resp.headers.get('Content-Type', 'unknown')})"
+        )
+    data = body.get("data", [])
     return {c.get("mac", "").lower(): c for c in data if c.get("mac")}
 
 
@@ -156,7 +172,10 @@ def api_status():
     if cfg_error:
         return jsonify({"error": cfg_error}), 500
 
-    containers, _ = get_containers()
+    try:
+        containers, _ = get_containers()
+    except Exception as exc:
+        return jsonify({"error": f"Unable to list Docker containers: {exc}"}), 502
 
     session = build_session()
     try:
@@ -168,6 +187,16 @@ def api_status():
             # If network login fails but main login succeeded, continue; errors bubble below.
             pass
         clients = fetch_clients(session)
+    except requests.HTTPError as exc:
+        detail = ""
+        if exc.response is not None:
+            detail = f" (body: {exc.response.text})"
+        return (
+            jsonify({"error": f"UniFi API error: {exc} {detail}".strip()}),
+            exc.response.status_code if exc.response is not None else 502,
+        )
+    except (requests.ConnectionError, requests.Timeout) as exc:
+        return jsonify({"error": f"Unable to connect to UniFi: {exc}"}), 504
     except Exception as exc:
         return jsonify({"error": f"Unable to reach UniFi: {exc}"}), 502
 
@@ -205,7 +234,11 @@ def api_apply():
     if not mac:
         return jsonify({"error": "mac is required"}), 400
 
-    containers, container_index = get_containers()
+    try:
+        containers, container_index = get_containers()
+    except Exception as exc:
+        return jsonify({"error": f"Unable to list Docker containers: {exc}"}), 502
+
     container = container_index.get(mac)
     if not container:
         return jsonify({"error": f"No running container with MAC {mac}"}), 404
@@ -229,6 +262,8 @@ def api_apply():
             jsonify({"error": f"{exc} {detail}".strip()}),
             exc.response.status_code if exc.response is not None else 502,
         )
+    except (requests.ConnectionError, requests.Timeout) as exc:
+        return jsonify({"error": f"Unable to connect to UniFi: {exc}"}), 504
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
 
@@ -327,11 +362,17 @@ def index():
         return `<div class="row">${cols.map(col => `<div>${col || ""}</div>`).join("")}</div>`;
       }
 
+      async function parseJSON(res) {
+        const text = await res.text();
+        try { return JSON.parse(text); }
+        catch { throw new Error(res.ok ? "Invalid JSON from server" : `HTTP ${res.status}: ${text.slice(0, 200)}`); }
+      }
+
       async function loadData() {
         statusEl.textContent = "Loading...";
         try {
           const res = await fetch("/api/status");
-          const data = await res.json();
+          const data = await parseJSON(res);
           if (!res.ok) throw new Error(data.error || res.statusText);
 
           dataCache = data;
@@ -397,7 +438,7 @@ def index():
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({mac})
           });
-          const data = await res.json();
+          const data = await parseJSON(res);
           if (!res.ok) throw new Error(data.error || res.statusText);
           statusEl.textContent = data.message || "Updated.";
           await loadData();
