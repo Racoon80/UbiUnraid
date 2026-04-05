@@ -267,6 +267,7 @@ def index():
         gap: 12px;
       }
       .row:last-child { border-bottom: none; }
+      .row > div:last-child { text-align: right; }
       .label { color: #cbd5f5; font-size: 24px; font-weight: 700; }
       .btn {
         padding: 6px 14px;
@@ -321,7 +322,7 @@ def index():
     <div class="card">
       <h2>MAC-aligned view</h2>
       <div class="row label">
-        <div>Unraid (name / IP / MAC)</div><div>UniFi (name / IP / MAC)</div><div>Action</div>
+        <div>Unraid (name / IP / MAC)</div><div>UniFi (name / IP / MAC)</div><div style="text-align:right;">Action</div>
       </div>
       <div id="rows"></div>
     </div>
