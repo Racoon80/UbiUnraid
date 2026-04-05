@@ -15,7 +15,6 @@ UNIFI_SITE = os.environ.get("UNIFI_SITE", "default")
 UNIFI_NETWORK_ID = os.environ.get("UNIFI_NETWORK_ID") or ""
 VERIFY_SSL = os.environ.get("VERIFY_SSL", "false").lower() == "true"
 UNIFI_API_KEY = os.environ.get("UNIFI_API_KEY") or ""
-REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "30"))
 
 
 def ensure_configured() -> Optional[str]:
@@ -24,16 +23,8 @@ def ensure_configured() -> Optional[str]:
     return None
 
 
-class _TimeoutSession(requests.Session):
-    """A requests.Session that applies a default timeout to every request."""
-
-    def request(self, *args, **kwargs):
-        kwargs.setdefault("timeout", REQUEST_TIMEOUT)
-        return super().request(*args, **kwargs)
-
-
-def build_session() -> _TimeoutSession:
-    session = _TimeoutSession()
+def build_session() -> requests.Session:
+    session = requests.Session()
     session.verify = VERIFY_SSL
     session.headers.update(
         {
@@ -92,14 +83,7 @@ def login_network(session: requests.Session) -> None:
 def fetch_clients(session: requests.Session) -> Dict[str, dict]:
     resp = session.get(f"{UNIFI_HOST}/proxy/network/api/s/{UNIFI_SITE}/rest/user")
     resp.raise_for_status()
-    try:
-        body = resp.json()
-    except (ValueError, json.JSONDecodeError):
-        raise RuntimeError(
-            f"UniFi returned non-JSON response (status {resp.status_code}, "
-            f"content-type: {resp.headers.get('Content-Type', 'unknown')})"
-        )
-    data = body.get("data", [])
+    data = resp.json().get("data", [])
     return {c.get("mac", "").lower(): c for c in data if c.get("mac")}
 
 
@@ -172,10 +156,7 @@ def api_status():
     if cfg_error:
         return jsonify({"error": cfg_error}), 500
 
-    try:
-        containers, _ = get_containers()
-    except Exception as exc:
-        return jsonify({"error": f"Unable to list Docker containers: {exc}"}), 502
+    containers, _ = get_containers()
 
     session = build_session()
     try:
@@ -187,16 +168,6 @@ def api_status():
             # If network login fails but main login succeeded, continue; errors bubble below.
             pass
         clients = fetch_clients(session)
-    except requests.HTTPError as exc:
-        detail = ""
-        if exc.response is not None:
-            detail = f" (body: {exc.response.text})"
-        return (
-            jsonify({"error": f"UniFi API error: {exc} {detail}".strip()}),
-            exc.response.status_code if exc.response is not None else 502,
-        )
-    except (requests.ConnectionError, requests.Timeout) as exc:
-        return jsonify({"error": f"Unable to connect to UniFi: {exc}"}), 504
     except Exception as exc:
         return jsonify({"error": f"Unable to reach UniFi: {exc}"}), 502
 
@@ -234,11 +205,7 @@ def api_apply():
     if not mac:
         return jsonify({"error": "mac is required"}), 400
 
-    try:
-        containers, container_index = get_containers()
-    except Exception as exc:
-        return jsonify({"error": f"Unable to list Docker containers: {exc}"}), 502
-
+    containers, container_index = get_containers()
     container = container_index.get(mac)
     if not container:
         return jsonify({"error": f"No running container with MAC {mac}"}), 404
@@ -262,8 +229,6 @@ def api_apply():
             jsonify({"error": f"{exc} {detail}".strip()}),
             exc.response.status_code if exc.response is not None else 502,
         )
-    except (requests.ConnectionError, requests.Timeout) as exc:
-        return jsonify({"error": f"Unable to connect to UniFi: {exc}"}), 504
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
 
@@ -304,17 +269,27 @@ def index():
       .row:last-child { border-bottom: none; }
       .label { color: #cbd5f5; font-size: 24px; font-weight: 700; }
       .btn {
-        padding: 6px 10px;
+        padding: 6px 14px;
         border-radius: 8px;
-        border: 1px solid #38bdf8;
-        background: linear-gradient(120deg, #06b6d4, #3b82f6);
-        color: #0b1224;
         font-weight: 600;
         cursor: pointer;
         transition: transform 80ms ease, box-shadow 120ms ease;
+        font-size: 13px;
       }
-      .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-      .btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(59,130,246,0.35); }
+      .btn:disabled { cursor: default; transform: none; box-shadow: none; }
+      .btn:not(:disabled):hover { transform: translateY(-1px); }
+      .btn-pending {
+        border: 1px solid #f59e0b;
+        background: linear-gradient(120deg, #f59e0b, #d97706);
+        color: #0b1224;
+      }
+      .btn-pending:hover { box-shadow: 0 8px 20px rgba(245,158,11,0.35); }
+      .btn-approved {
+        border: 1px solid #22c55e;
+        background: linear-gradient(120deg, #22c55e, #16a34a);
+        color: #0b1224;
+        opacity: 0.8;
+      }
       .pill {
         display: inline-block;
         padding: 2px 8px;
@@ -362,17 +337,11 @@ def index():
         return `<div class="row">${cols.map(col => `<div>${col || ""}</div>`).join("")}</div>`;
       }
 
-      async function parseJSON(res) {
-        const text = await res.text();
-        try { return JSON.parse(text); }
-        catch { throw new Error(res.ok ? "Invalid JSON from server" : `HTTP ${res.status}: ${text.slice(0, 200)}`); }
-      }
-
       async function loadData() {
         statusEl.textContent = "Loading...";
         try {
           const res = await fetch("/api/status");
-          const data = await parseJSON(res);
+          const data = await res.json();
           if (!res.ok) throw new Error(data.error || res.statusText);
 
           dataCache = data;
@@ -393,12 +362,11 @@ def index():
         containers.forEach(c => containerByMac[c.mac] = c);
         router.forEach(r => routerByMac[r.mac] = r);
 
-        // Only show MACs that exist in both Unraid and UniFi.
-        const intersection = Object.keys(containerByMac).filter(mac => routerByMac[mac]).sort();
+        const allMacs = [...new Set([...Object.keys(containerByMac)])].sort();
         const query = (searchEl.value || "").toLowerCase().trim();
         const scope = filterEl.value || "all";
 
-        const filtered = intersection.filter(mac => {
+        const filtered = allMacs.filter(mac => {
           const c = containerByMac[mac];
           const r = routerByMac[mac];
           const hayC = c ? `${c.name} ${c.ip} ${c.mac}`.toLowerCase() : "";
@@ -410,21 +378,35 @@ def index():
           return hitC || hitR;
         });
 
+        // Sort: not approved (not in UniFi or name mismatch) first
+        filtered.sort((a, b) => {
+          const aApproved = routerByMac[a] && routerByMac[a].name === containerByMac[a].name;
+          const bApproved = routerByMac[b] && routerByMac[b].name === containerByMac[b].name;
+          if (aApproved === bApproved) return containerByMac[a].name.localeCompare(containerByMac[b].name);
+          return aApproved ? 1 : -1;
+        });
+
         rowsEl.innerHTML = filtered.length
           ? filtered.map(mac => {
               const c = containerByMac[mac];
               const r = routerByMac[mac];
+              const approved = r && r.name === c.name;
               const containerCol = `<strong>${c.name}</strong><div class="pill">${c.ip}</div><div class="pill">${c.mac}</div>`;
-              const routerCol = `<strong>${r.name || r.hostname || "—"}</strong><div class="pill">${r.fixed_ip || "—"}</div><div class="pill">${mac}</div>`;
+              const routerCol = r
+                ? `<strong>${r.name || r.hostname || "—"}</strong><div class="pill">${r.fixed_ip || "—"}</div><div class="pill">${mac}</div>`
+                : `<span class="muted">Not in UniFi</span><div class="pill">${mac}</div>`;
+              const btnClass = approved ? "btn btn-approved" : "btn btn-pending";
+              const btnText = approved ? "Approved" : "Approve";
+              const btnDisabled = approved ? "disabled" : "";
               return rowTemplate([
                 containerCol,
                 routerCol,
                 `<div style="display:flex; justify-content:flex-end;">
-                   <button class="btn" title="Apply container name/IP to UniFi" onclick="apply('${mac}')">Approve</button>
+                   <button class="${btnClass}" ${btnDisabled} title="${approved ? 'Already synced' : 'Apply container name/IP to UniFi'}" onclick="apply('${mac}')">${btnText}</button>
                  </div>`
               ]);
             }).join("")
-          : '<div class="row"><div>No matching MAC addresses between Unraid and UniFi.</div></div>';
+          : '<div class="row"><div>No Docker containers found.</div></div>';
       }
 
       searchEl.addEventListener("input", () => dataCache && renderRows(dataCache));
@@ -438,7 +420,7 @@ def index():
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({mac})
           });
-          const data = await parseJSON(res);
+          const data = await res.json();
           if (!res.ok) throw new Error(data.error || res.statusText);
           statusEl.textContent = data.message || "Updated.";
           await loadData();
