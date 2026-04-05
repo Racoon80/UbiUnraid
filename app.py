@@ -396,15 +396,18 @@ def index():
               const routerCol = r
                 ? `<strong>${r.name || r.hostname || "—"}</strong><div class="pill">${r.fixed_ip || "—"}</div><div class="pill">${mac}</div>`
                 : `<span class="muted">Not in UniFi</span><div class="pill">${mac}</div>`;
-              const btnClass = approved ? "btn btn-approved" : "btn btn-pending";
-              const btnText = approved ? "Approved" : "Approve";
-              const btnDisabled = approved ? "disabled" : "";
+              let actionCol;
+              if (!r) {
+                actionCol = `<span class="muted">Info: not in UniFi</span>`;
+              } else if (approved) {
+                actionCol = `<button class="btn btn-approved" disabled title="Already synced">Approved</button>`;
+              } else {
+                actionCol = `<button class="btn btn-pending" title="Apply container name/IP to UniFi" onclick="apply('${mac}')">Approve</button>`;
+              }
               return rowTemplate([
                 containerCol,
                 routerCol,
-                `<div style="display:flex; justify-content:flex-end;">
-                   <button class="${btnClass}" ${btnDisabled} title="${approved ? 'Already synced' : 'Apply container name/IP to UniFi'}" onclick="apply('${mac}')">${btnText}</button>
-                 </div>`
+                `<div style="display:flex; justify-content:flex-end;">${actionCol}</div>`
               ]);
             }).join("")
           : '<div class="row"><div>No Docker containers found.</div></div>';
